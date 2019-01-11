@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+	<Appenders>
+		<Appender type="File" name="log-file" fileName="app.log"></Appender>
+		<Console name="STDOUT" target="SYSTEM_OUT"></Console>
+	</Appenders>
+	<Loggers>
+		<Root level="info">
+			<AppenderRef ref="File"/>
+			<AppenderRef ref="STDOUT"/>
+		</Root>
+	</Loggers>
+</Configuration>
