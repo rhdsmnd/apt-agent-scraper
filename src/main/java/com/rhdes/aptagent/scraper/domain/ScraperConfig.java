@@ -7,15 +7,12 @@ import java.util.Date;
 public class ScraperConfig {
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
-
     private int minBedrooms;
     private int maxBedrooms;
-
     private Collection<Polygon> desiredAreas;
-
     private int maxToFetch;
-
     private Date lastSeen;
+
 
     public BigDecimal getMinPrice() {
         return minPrice;

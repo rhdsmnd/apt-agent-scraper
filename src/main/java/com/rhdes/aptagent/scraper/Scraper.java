@@ -4,18 +4,15 @@ import com.rhdes.aptagent.scraper.domain.Listing;
 import com.rhdes.aptagent.scraper.domain.Location;
 import com.rhdes.aptagent.scraper.domain.ScraperConfig;
 import com.rhdes.aptagent.scraper.exception.ScraperException;
-import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.safety.Whitelist;
-import org.jsoup.select.Elements;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -33,30 +30,17 @@ public class Scraper {
     public static final Logger logger = LogManager.getLogger(Scraper.class);
 
     public static void main(String[] args) {
-        logger.info("Hello");
-        String content = null;
-        Element craigslistPage = null;
-        try {
-            craigslistPage = Jsoup.connect("https://sfbay.craigslist.org/d/apts-housing-for-rent/search/apa").get();
-        } catch (IOException e) {
-            e.printStackTrace();
-            System.out.println("Unsuccessful http request to get craigslist listings.");
-        }
 
         ScraperConfig config = makeHardCodeScraperConfig();
 
-        Collection<Listing> listings = parseCraigslistPage(craigslistPage, config);
+        String content = null;
 
-        int num = (listings == null ? 0 : listings.size());
+        ParsedCraigslistStats scraperStats = scrapeListings(config);
 
-        System.out.println("Retrieved " + num + " listing" + (num == 1 ? "" : "s") + ".");
+        logger.info("Saved " + scraperStats.getSavedListings().size() + " out of "
+                                + Utils.formatPluralModifier("listing", scraperStats.getNumberOfListings()) + ".");
 
-        if (listings != null) {
-            for (Listing current : listings) {
-                System.out.println("");
-                System.out.println(current);
-            }
-        }
+        
     }
 
     private static ScraperConfig makeHardCodeScraperConfig() {
@@ -64,9 +48,9 @@ public class Scraper {
 
         Date lastSeen = null;
         try {
-            lastSeen = new SimpleDateFormat("yyyy/MM/dd").parse("2019/01/01");
+            lastSeen = new SimpleDateFormat("yyyy/MM/dd HH:mm").parse("2019/01/21 23:55");
         } catch (ParseException e) {
-            System.out.println("Unable to parse date: " + e);
+            logger.warn("Unable to parse date: " + e);
         }
         ret.setLastSeen(lastSeen);
 
@@ -80,32 +64,78 @@ public class Scraper {
         return ret;
     }
 
-    public static Collection<Listing> parseCraigslistPage(Element craigslistPage, ScraperConfig config) {
+    public static ParsedCraigslistStats scrapeListings(ScraperConfig config) {
+        Date currentDateTime = new Date();
+        Collection<Listing> savedListings = new ArrayList<Listing>();
+        int listingsSeen = 0;
+        while (true) {
+            Element listingsPage = null;
+            try {
+                listingsPage = fetchCraigslistPage(listingsSeen);
+            } catch (IOException e) {
+                break;
+            }
+            ParsedCraigslistPage parsedPage = parseCraigslistPage(listingsPage, config);
+            if (parsedPage == null) {
+                logger.info("No listings found on craigslist page; exiting.");
+                break;
+            }
 
+            savedListings.addAll(parsedPage.getSavedListings());
+            listingsSeen += parsedPage.getNumberOfListingsSeen();
+
+            if (parsedPage.isStopParsing()) {
+                break;
+            }
+        }
+
+        return new ParsedCraigslistStats(listingsSeen, savedListings, currentDateTime);
+    }
+
+    public static ParsedCraigslistPage parseCraigslistPage(Element craigslistPage, ScraperConfig config) {
+        ArrayList<Listing> savedListings = new ArrayList<Listing>();
+        int numSeen = 0;
+        boolean stopParsing = false;
         for (Element listing : craigslistPage.getElementsByClass("result-row")) {
+            numSeen += 1;
             Listing currentListing = new Listing();
             try {
+                Date listingDate = getDate(listing);
+                if (listingDate.compareTo(config.getLastSeen())< 0) {
+                    logger.info("Current listing was posted earlier (" + listingDate + ") than the last time the parser was run.  Exiting.");
+                    stopParsing = true;
+                    break;
+                }
+
+                currentListing.setDate(listingDate);
                 currentListing.setHref(getLink(listing));
                 currentListing.setTitle(getTitle(listing));
-                currentListing.setDate(getDate(listing));
                 currentListing.setPrice(getPrice(listing));
                 currentListing.setNeighborhood(getNeighborhood(listing));
                 currentListing.setBedrooms(getBedrooms(listing));
                 currentListing.setSqFeet(getSqFeet(listing));
                 currentListing.setLoc(getLocation(listing));
+
+                logger.info("Saving listing with date " + currentListing.getDate() + ": " + currentListing.getTitle());
+
+                savedListings.add(currentListing);
             } catch (ScraperException e) {
-                System.err.println("Could not parse listing: " + listing);
+                logger.warn("Could not parse listing: " + listing);
             }
 
-            System.out.println(currentListing);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.warn(e);
             }
         }
 
-        return null;
+        if (numSeen > 0) {
+            return new ParsedCraigslistPage(savedListings, numSeen, stopParsing);
+        } else {
+            return null;
+        }
+
     }
 
     private static Integer getBedrooms(Element listing) {
@@ -253,5 +283,98 @@ public class Scraper {
         }
     }
 
+    public static Element fetchCraigslistPage(int startListingIndex) throws IOException {
+        Element craigslistPage = null;
+        String fetchUrl = "https://sfbay.craigslist.org/d/apts-housing-for-rent/search/apa";
+        if (startListingIndex > 0) {
+            fetchUrl += "?s=" + startListingIndex;
+        }
+        try {
+            logger.info("Fetching: " + fetchUrl);
+            return Jsoup.connect(fetchUrl).get();
+        } catch (IOException e) {
+            e.printStackTrace();
+            logger.error("Unsuccessful http request to get craigslist listings. Url: " + fetchUrl);
+            throw e;
+        }
+    }
 
+    public static class ParsedCraigslistStats {
+        private int numberOfListings;
+        private Collection<Listing> savedListings;
+        private Date earliestParsedListingDate;
+
+        public ParsedCraigslistStats(int numberOfListings, Collection<Listing> savedListings,
+                                     Date earliestParsedListingDate) {
+            this.setNumberOfListings(numberOfListings);
+            this.setSavedListings(savedListings);
+            this.setEarliestParsedListingDate(earliestParsedListingDate);
+        }
+
+        public ParsedCraigslistStats(int numberOfListings, Date earliestParsedListingDate) {
+            this.setNumberOfListings(numberOfListings);
+            this.setSavedListings(new ArrayList<Listing>());
+            this.setEarliestParsedListingDate(earliestParsedListingDate);
+        }
+
+        public int getNumberOfListings() {
+            return numberOfListings;
+        }
+
+        public void setNumberOfListings(int numberOfListings) {
+            this.numberOfListings = numberOfListings;
+        }
+
+        public Collection<Listing> getSavedListings() {
+            return savedListings;
+        }
+
+        public void setSavedListings(Collection<Listing> savedListings) {
+            this.savedListings = savedListings;
+        }
+
+        public Date getEarliestParsedListingDate() {
+            return earliestParsedListingDate;
+        }
+
+        public void setEarliestParsedListingDate(Date earliestParsedListingDate) {
+            this.earliestParsedListingDate = earliestParsedListingDate;
+        }
+    }
+
+    public static class ParsedCraigslistPage {
+        private Collection<Listing> savedListings;
+        private int numberOfListingsSeen;
+        private boolean stopParsing;
+
+        public ParsedCraigslistPage(Collection<Listing> savedListings, int numberOfListingsSeen, boolean stopParsing) {
+            this.setSavedListings(savedListings);
+            this.setNumberOfListingsSeen(numberOfListingsSeen);
+            this.setStopParsing(stopParsing);
+        }
+
+        public Collection<Listing> getSavedListings() {
+            return savedListings;
+        }
+
+        public void setSavedListings(Collection<Listing> savedListings) {
+            this.savedListings = savedListings;
+        }
+
+        public int getNumberOfListingsSeen() {
+            return numberOfListingsSeen;
+        }
+
+        public void setNumberOfListingsSeen(int numberOfListingsSeen) {
+            this.numberOfListingsSeen = numberOfListingsSeen;
+        }
+
+        public boolean isStopParsing() {
+            return stopParsing;
+        }
+
+        public void setStopParsing(boolean stopParsing) {
+            this.stopParsing = stopParsing;
+        }
+    }
 }
