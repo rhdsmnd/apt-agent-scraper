@@ -1,8 +1,11 @@
 package com.rhdes.aptagent.scraper;
 
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.rhdes.aptagent.scraper.domain.Listing;
 import com.rhdes.aptagent.scraper.domain.Location;
 import com.rhdes.aptagent.scraper.domain.ScraperConfig;
+import com.rhdes.aptagent.scraper.domain.ScraperResponse;
 import com.rhdes.aptagent.scraper.exception.ScraperException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
@@ -19,52 +22,24 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.logging.log4j.Logger;
-import org.apache.logging.log4j.LogManager;
+//import org.apache.logging.log4j.Logger;
+//import org.apache.logging.log4j.LogManager;
 
-public class Scraper {
+public class Scraper implements RequestHandler<ScraperConfig, ScraperResponse> {
 
-    public static final Pattern brRegex = Pattern.compile("\\dbr");
-    public static final Pattern sqFeetRegex = Pattern.compile("\\d+ft");
+    public static final Pattern BR_REGEX = Pattern.compile("\\dbr");
+    public static final Pattern SQ_FT_REGEX = Pattern.compile("\\d+ft");
+    public static final String DT_FORMAT_STR = "yyyy/MM/dd HH:mm";
 
-    public static final Logger logger = LogManager.getLogger(Scraper.class);
-
-    public static void main(String[] args) {
-
-        ScraperConfig config = makeHardCodeScraperConfig();
-
-        String content = null;
-
-        ParsedCraigslistStats scraperStats = scrapeListings(config);
-
-        logger.info("Saved " + scraperStats.getSavedListings().size() + " out of "
-                                + Utils.formatPluralModifier("listing", scraperStats.getNumberOfListings()) + ".");
-
-        
+    @Override
+    public ScraperResponse handleRequest(ScraperConfig scraperConfig, Context context) {
+        ScraperResponse scraperStats = scrapeListings(scraperConfig);
+        System.out.println("Saved " + scraperStats.getSavedListings().size() + " out of "
+                + Utils.formatPluralModifier("listing", scraperStats.getNumberOfListings()) + ".");
+        return scraperStats;
     }
 
-    private static ScraperConfig makeHardCodeScraperConfig() {
-        ScraperConfig ret = new ScraperConfig();
-
-        Date lastSeen = null;
-        try {
-            lastSeen = new SimpleDateFormat("yyyy/MM/dd HH:mm").parse("2019/01/21 23:55");
-        } catch (ParseException e) {
-            logger.warn("Unable to parse date: " + e);
-        }
-        ret.setLastSeen(lastSeen);
-
-        ret.setMinPrice(new BigDecimal("800"));
-        ret.setMaxPrice(new BigDecimal("1800"));
-        ret.setMinBedrooms(0);
-        ret.setMaxBedrooms(1);
-
-        ret.setMaxToFetch(500);
-
-        return ret;
-    }
-
-    public static ParsedCraigslistStats scrapeListings(ScraperConfig config) {
+    public static ScraperResponse scrapeListings(ScraperConfig config) {
         Date currentDateTime = new Date();
         Collection<Listing> savedListings = new ArrayList<Listing>();
         int listingsSeen = 0;
@@ -76,8 +51,9 @@ public class Scraper {
                 break;
             }
             ParsedCraigslistPage parsedPage = parseCraigslistPage(listingsPage, config);
-            if (parsedPage == null) {
-                logger.info("No listings found on craigslist page; exiting.");
+            if (parsedPage.getNumberOfListingsSeen() == 0
+                    && !parsedPage.isStopParsing()) {
+                System.out.println("No listings found on Craigslist page; exiting.");
                 break;
             }
 
@@ -89,23 +65,32 @@ public class Scraper {
             }
         }
 
-        return new ParsedCraigslistStats(listingsSeen, savedListings, currentDateTime);
+        return new ScraperResponse(listingsSeen, savedListings, new SimpleDateFormat(DT_FORMAT_STR).format(currentDateTime));
     }
 
     public static ParsedCraigslistPage parseCraigslistPage(Element craigslistPage, ScraperConfig config) {
         ArrayList<Listing> savedListings = new ArrayList<Listing>();
         int numSeen = 0;
         boolean stopParsing = false;
+
+        Date lastSeen = null;
+        try {
+            lastSeen = new SimpleDateFormat(DT_FORMAT_STR).parse(config.getLastSeen());
+        } catch (ParseException e) {
+            System.err.println("Unable to parse date: " + e);
+        }
+
         for (Element listing : craigslistPage.getElementsByClass("result-row")) {
-            numSeen += 1;
             Listing currentListing = new Listing();
             try {
                 Date listingDate = getDate(listing);
-                if (listingDate.compareTo(config.getLastSeen())< 0) {
-                    logger.info("Current listing was posted earlier (" + listingDate + ") than the last time the parser was run.  Exiting.");
+                if (lastSeen != null && listingDate.compareTo(lastSeen)< 0) {
+                    System.out.println("Current listing was posted earlier (" + listingDate + ") than the last time the parser was run.  Exiting.");
                     stopParsing = true;
                     break;
                 }
+
+                numSeen += 1;
 
                 currentListing.setDate(listingDate);
                 currentListing.setHref(getLink(listing));
@@ -116,25 +101,21 @@ public class Scraper {
                 currentListing.setSqFeet(getSqFeet(listing));
                 currentListing.setLoc(getLocation(listing));
 
-                logger.info("Saving listing with date " + currentListing.getDate() + ": " + currentListing.getTitle());
+                System.out.println("Saving listing with date " + currentListing.getDate() + ": " + currentListing.getTitle());
 
                 savedListings.add(currentListing);
             } catch (ScraperException e) {
-                logger.warn("Could not parse listing: " + listing);
+                System.err.println("Could not parse listing: " + listing);
             }
 
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                logger.warn(e);
+                System.err.println(e);
             }
         }
 
-        if (numSeen > 0) {
-            return new ParsedCraigslistPage(savedListings, numSeen, stopParsing);
-        } else {
-            return null;
-        }
+        return new ParsedCraigslistPage(savedListings, numSeen, stopParsing);
 
     }
 
@@ -144,7 +125,7 @@ public class Scraper {
             return null;
         }
 
-        Matcher listingMatcher = brRegex.matcher(bedroomText.get(0).html());
+        Matcher listingMatcher = BR_REGEX.matcher(bedroomText.get(0).html());
         if (listingMatcher.find()) {
             try {
                 return Integer.parseInt(listingMatcher.group().substring(0, 1));
@@ -160,7 +141,7 @@ public class Scraper {
             return null;
         }
 
-        Matcher listingMatcher = sqFeetRegex.matcher(sqFeetText.get(0).html());
+        Matcher listingMatcher = SQ_FT_REGEX.matcher(sqFeetText.get(0).html());
         if (listingMatcher.find()) {
             try {
                 // Omit 'ft'
@@ -290,55 +271,12 @@ public class Scraper {
             fetchUrl += "?s=" + startListingIndex;
         }
         try {
-            logger.info("Fetching: " + fetchUrl);
+            System.out.println("Fetching: " + fetchUrl);
             return Jsoup.connect(fetchUrl).get();
         } catch (IOException e) {
             e.printStackTrace();
-            logger.error("Unsuccessful http request to get craigslist listings. Url: " + fetchUrl);
+            System.err.println("Unsuccessful http request to get craigslist listings. Url: " + fetchUrl);
             throw e;
-        }
-    }
-
-    public static class ParsedCraigslistStats {
-        private int numberOfListings;
-        private Collection<Listing> savedListings;
-        private Date earliestParsedListingDate;
-
-        public ParsedCraigslistStats(int numberOfListings, Collection<Listing> savedListings,
-                                     Date earliestParsedListingDate) {
-            this.setNumberOfListings(numberOfListings);
-            this.setSavedListings(savedListings);
-            this.setEarliestParsedListingDate(earliestParsedListingDate);
-        }
-
-        public ParsedCraigslistStats(int numberOfListings, Date earliestParsedListingDate) {
-            this.setNumberOfListings(numberOfListings);
-            this.setSavedListings(new ArrayList<Listing>());
-            this.setEarliestParsedListingDate(earliestParsedListingDate);
-        }
-
-        public int getNumberOfListings() {
-            return numberOfListings;
-        }
-
-        public void setNumberOfListings(int numberOfListings) {
-            this.numberOfListings = numberOfListings;
-        }
-
-        public Collection<Listing> getSavedListings() {
-            return savedListings;
-        }
-
-        public void setSavedListings(Collection<Listing> savedListings) {
-            this.savedListings = savedListings;
-        }
-
-        public Date getEarliestParsedListingDate() {
-            return earliestParsedListingDate;
-        }
-
-        public void setEarliestParsedListingDate(Date earliestParsedListingDate) {
-            this.earliestParsedListingDate = earliestParsedListingDate;
         }
     }
 

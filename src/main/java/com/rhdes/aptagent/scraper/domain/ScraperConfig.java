@@ -2,7 +2,6 @@ package com.rhdes.aptagent.scraper.domain;
 
 import java.math.BigDecimal;
 import java.util.Collection;
-import java.util.Date;
 
 public class ScraperConfig {
     private BigDecimal minPrice;
@@ -10,9 +9,7 @@ public class ScraperConfig {
     private int minBedrooms;
     private int maxBedrooms;
     private Collection<Polygon> desiredAreas;
-    private int maxToFetch;
-    private Date lastSeen;
-
+    private String lastSeen;
 
     public BigDecimal getMinPrice() {
         return minPrice;
@@ -50,19 +47,11 @@ public class ScraperConfig {
         return desiredAreas;
     }
 
-    public int getMaxToFetch() {
-        return maxToFetch;
-    }
-
-    public void setMaxToFetch(int maxToFetch) {
-        this.maxToFetch = maxToFetch;
-    }
-
-    public Date getLastSeen() {
+    public String getLastSeen() {
         return lastSeen;
     }
 
-    public void setLastSeen(Date lastSeen) {
+    public void setLastSeen(String lastSeen) {
         this.lastSeen = lastSeen;
     }
 }
