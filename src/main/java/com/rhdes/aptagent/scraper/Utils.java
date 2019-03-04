@@ -8,4 +8,12 @@ public class Utils {
             return number + " " + noun + "s";
         }
     }
+
+    public static String capitalize(String wordOrPhrase) {
+        if (wordOrPhrase == null || wordOrPhrase.length() == 0) {
+            return wordOrPhrase;
+        }
+
+        return wordOrPhrase.substring(0, 1).toUpperCase() + wordOrPhrase.substring(1);
+    }
 }

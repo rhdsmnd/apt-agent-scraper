@@ -1,7 +1,9 @@
 package com.rhdes.aptagent.scraper.domain;
 
 import java.math.BigDecimal;
+import java.net.URL;
 import java.util.Collection;
+import java.util.Date;
 
 public class ScraperConfig {
     private BigDecimal minPrice;
@@ -9,7 +11,8 @@ public class ScraperConfig {
     private int minBedrooms;
     private int maxBedrooms;
     private Collection<Polygon> desiredAreas;
-    private String lastSeen;
+    private Date lastSeen;
+    private URL listingsUrl;
 
     public BigDecimal getMinPrice() {
         return minPrice;
@@ -47,11 +50,19 @@ public class ScraperConfig {
         return desiredAreas;
     }
 
-    public String getLastSeen() {
+    public Date getLastSeen() {
         return lastSeen;
     }
 
-    public void setLastSeen(String lastSeen) {
+    public void setLastSeen(Date lastSeen) {
         this.lastSeen = lastSeen;
+    }
+
+    public URL getBaseUrl() {
+        return listingsUrl;
+    }
+
+    public void setBaseUrl(URL newUrl) {
+        this.listingsUrl = newUrl;
     }
 }

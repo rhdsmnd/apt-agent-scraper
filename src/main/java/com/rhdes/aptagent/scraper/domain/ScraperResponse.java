@@ -6,29 +6,21 @@ import java.util.Date;
 import java.util.List;
 
 public class ScraperResponse {
-    private int numberOfListings;
+    private int numberOfListingsParsed;
     private Collection<Listing> savedListings;
     private String earliestParsedListingDate;
 
     public ScraperResponse(int numberOfListings, Collection<Listing> savedListings,
                                  String earliestParsedListingDate) {
-        this.setNumberOfListings(numberOfListings);
+        this.setNumberOfListingsParsed(numberOfListings);
         this.setSavedListings(savedListings);
         this.setEarliestParsedListingDate(earliestParsedListingDate);
     }
 
     public ScraperResponse(int numberOfListings, String earliestParsedListingDate) {
-        this.setNumberOfListings(numberOfListings);
+        this.setNumberOfListingsParsed(numberOfListings);
         this.setSavedListings(new ArrayList<Listing>());
         this.setEarliestParsedListingDate(earliestParsedListingDate);
-    }
-
-    public int getNumberOfListings() {
-        return numberOfListings;
-    }
-
-    public void setNumberOfListings(int numberOfListings) {
-        this.numberOfListings = numberOfListings;
     }
 
     public Collection<Listing> getSavedListings() {
@@ -47,4 +39,11 @@ public class ScraperResponse {
         this.earliestParsedListingDate = earliestParsedListingDate;
     }
 
+    public int getNumberOfListingsParsed() {
+        return numberOfListingsParsed;
+    }
+
+    public void setNumberOfListingsParsed(int numberOfListingsParsed) {
+        this.numberOfListingsParsed = numberOfListingsParsed;
+    }
 }

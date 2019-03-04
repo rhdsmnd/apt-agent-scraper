@@ -7,6 +7,7 @@ import com.rhdes.aptagent.scraper.domain.Location;
 import com.rhdes.aptagent.scraper.domain.ScraperConfig;
 import com.rhdes.aptagent.scraper.domain.ScraperResponse;
 import com.rhdes.aptagent.scraper.exception.ScraperException;
+import com.rhdes.aptagent.scraper.exception.ScraperInputException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.safety.Whitelist;
@@ -30,13 +31,29 @@ public class Scraper implements RequestHandler<ScraperConfig, ScraperResponse> {
     public static final Pattern BR_REGEX = Pattern.compile("\\dbr");
     public static final Pattern SQ_FT_REGEX = Pattern.compile("\\d+ft");
     public static final String DT_FORMAT_STR = "yyyy/MM/dd HH:mm";
+    public static final Pattern CL_DOMAIN_REGEX = Pattern.compile("[a-z.]+craigslist.org");
 
     @Override
     public ScraperResponse handleRequest(ScraperConfig scraperConfig, Context context) {
+        validateScraperConfig(scraperConfig);
         ScraperResponse scraperStats = scrapeListings(scraperConfig);
         System.out.println("Saved " + scraperStats.getSavedListings().size() + " out of "
-                + Utils.formatPluralModifier("listing", scraperStats.getNumberOfListings()) + ".");
+                + Utils.formatPluralModifier("listing", scraperStats.getNumberOfListingsParsed()) + ".");
         return scraperStats;
+    }
+
+    public void validateScraperConfig(ScraperConfig inputConfig) {
+        if (inputConfig.getMinPrice().compareTo(inputConfig.getMaxPrice()) > 0) {
+            throw new ScraperInputException("Minimum desired price is greater than maximum price.");
+        } else if (inputConfig.getMinPrice().compareTo(new BigDecimal(0)) > 0 || inputConfig.getMinPrice().compareTo(new BigDecimal("50000")) > 0) {
+            throw new ScraperInputException("Minimum desired price outside allowed price range.");
+        }
+
+        if (inputConfig.getMaxPrice().compareTo(new BigDecimal(0)) > 0 || inputConfig.getMaxPrice().compareTo(new BigDecimal("50000")) > 0) {
+            throw new ScraperInputException("Maximum desired price outside allowed price range.");
+        }
+
+
     }
 
     public static ScraperResponse scrapeListings(ScraperConfig config) {
@@ -114,9 +131,7 @@ public class Scraper implements RequestHandler<ScraperConfig, ScraperResponse> {
                 System.err.println(e);
             }
         }
-
         return new ParsedCraigslistPage(savedListings, numSeen, stopParsing);
-
     }
 
     private static Integer getBedrooms(Element listing) {
@@ -279,6 +294,23 @@ public class Scraper implements RequestHandler<ScraperConfig, ScraperResponse> {
             throw e;
         }
     }
+
+    public static Element fetchCraigslistPageRetry(int startListingIndex) throws IOException {
+        int numRetries = 3;
+        IOException caughtException = null;
+        for (int i = 0; i < numRetries; i += 1) {
+            try {
+                return fetchCraigslistPage(startListingIndex);
+            } catch (IOException e) {
+                caughtException = e;
+                System.err.println("Retrying http request ("+ i + "/" + numRetries + ") to Craigslist."
+                                    + "  IOException encountered while fetching Craigslist page: " + e);
+            }
+        }
+        throw caughtException;
+    }
+
+
 
     public static class ParsedCraigslistPage {
         private Collection<Listing> savedListings;
