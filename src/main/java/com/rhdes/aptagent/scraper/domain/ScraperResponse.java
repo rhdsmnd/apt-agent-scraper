@@ -2,48 +2,35 @@ package com.rhdes.aptagent.scraper.domain;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
-import java.util.List;
 
 public class ScraperResponse {
-    private int numberOfListingsParsed;
-    private Collection<Listing> savedListings;
-    private String earliestParsedListingDate;
+    private Collection<Listing> listings;
+    private String errorMessage;
 
-    public ScraperResponse(int numberOfListings, Collection<Listing> savedListings,
-                                 String earliestParsedListingDate) {
-        this.setNumberOfListingsParsed(numberOfListings);
+    public ScraperResponse(Collection<Listing> savedListings) {
         this.setSavedListings(savedListings);
-        this.setEarliestParsedListingDate(earliestParsedListingDate);
     }
 
-    public ScraperResponse(int numberOfListings, String earliestParsedListingDate) {
-        this.setNumberOfListingsParsed(numberOfListings);
+    public ScraperResponse(String errorMessage) {
+        this.setErrorMessage(errorMessage);
+    }
+
+    public ScraperResponse() {
         this.setSavedListings(new ArrayList<Listing>());
-        this.setEarliestParsedListingDate(earliestParsedListingDate);
     }
 
-    public Collection<Listing> getSavedListings() {
-        return savedListings;
+    public Collection<Listing> getListings() {
+        return listings;
+    }
+    public void setSavedListings(Collection<Listing> listings) {
+        this.listings = listings;
     }
 
-    public void setSavedListings(Collection<Listing> savedListings) {
-        this.savedListings = savedListings;
+    public String getErrorMessage() {
+        return errorMessage;
     }
-
-    public String getEarliestParsedListingDate() {
-        return earliestParsedListingDate;
-    }
-
-    public void setEarliestParsedListingDate(String earliestParsedListingDate) {
-        this.earliestParsedListingDate = earliestParsedListingDate;
-    }
-
-    public int getNumberOfListingsParsed() {
-        return numberOfListingsParsed;
-    }
-
-    public void setNumberOfListingsParsed(int numberOfListingsParsed) {
-        this.numberOfListingsParsed = numberOfListingsParsed;
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+        this.listings = null;
     }
 }

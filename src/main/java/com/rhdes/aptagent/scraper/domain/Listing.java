@@ -62,6 +62,10 @@ public class Listing {
         this.loc = loc;
     }
 
+    public boolean isValid() {
+        return href != null && loc != null && date != null && price > 0;
+    }
+
     @Override
     public String toString() {
         return "{"

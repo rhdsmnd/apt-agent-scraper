@@ -9,6 +9,7 @@
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <lambdaEntry>com.rhdes.aptagent.scraper.Scraper</lambdaEntry>
     </properties>
 
     <dependencies>
@@ -78,7 +79,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <mainClass>com.rhdes.aptagent.scraper.Scraper</mainClass>
+                    <mainClass>${mainClass}</mainClass>
                     <!--arguments>
                         <argument>foo</argument>
                         <argument>bar</argument>
